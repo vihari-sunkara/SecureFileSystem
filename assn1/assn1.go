@@ -148,6 +148,28 @@ func symmEncrypt(key []byte, value []byte) (cipherResult []byte, err error) {
 func (userdata *User) StoreFile(filename string, data []byte) (err error) {
 	//fmt.Println("data being stored: ",string(data))
 	//noOfBlocks := (binary.Size(data))/configBlockSize
+	fileNmHmac := userlib.NewHMAC([]byte(userdata.Username))
+	fileNmHmac.Write([]byte(filename))
+	fileNameHMAC := fileNmHmac.Sum(nil)
+
+	filemetadata := userdata.FileMetaData
+	filedata := filemetadata[string(fileNameHMAC)]
+	var secret, hash, val []byte
+	var isExists bool
+	if(filedata==nil){
+		secret = userlib.RandomBytes(16)
+		hash = userlib.RandomBytes(16)
+	}
+	if(filedata != nil){
+		// return errors.New("There is no such file")
+		secret=filedata["secret"]
+		hash=filedata["hash"] 
+		val=filedata["isOwner"]
+		filedata = nil
+		isExists=true
+	}
+	
+
 	length := len(data)
 	configBlockLen := configBlockSize
 	//fmt.Println("configBlockSize: ",configBlockLen)
@@ -160,8 +182,7 @@ func (userdata *User) StoreFile(filename string, data []byte) (err error) {
 	}
 
 	//SECRET KEY GENERATION
-	secret := userlib.RandomBytes(16)
-	hash := userlib.RandomBytes(16)
+	
 	//fmt.Println("secret: ",secret)
 
 	indexArr := make([]int, 0) //Creating index array to store block indices
@@ -219,18 +240,26 @@ func (userdata *User) StoreFile(filename string, data []byte) (err error) {
 	//Compute File name index to store file metadata against it
 	//print("username: ",userdata.Username)
 	// fileNameHMAC,_ := computeHMAC(userdata.Username,[]byte(filename))
-	fileNmHmac := userlib.NewHMAC([]byte(userdata.Username))
-	fileNmHmac.Write([]byte(filename))
-	fileNameHMAC := fileNmHmac.Sum(nil)
+	// fileNmHmac := userlib.NewHMAC([]byte(userdata.Username))
+	// fileNmHmac.Write([]byte(filename))
+	// fileNameHMAC := fileNmHmac.Sum(nil)
 
 	// Computed filenameHMAC:{"INDEX":index,"secret":secret}
 	//Need to set all the values to the user data structure
 
 	fileData := make(map[string][]byte)
-
+	//bit:=make([]byte,1)
+	bit:= []byte("1")
 	fileData["index"] = index
 	fileData["secret"] = secret
 	fileData["hash"] = hash
+	if(!isExists){
+		fileData["isOwner"] = bit
+	}
+	if(isExists){
+		fileData["isOwner"] = val
+	}
+
 	fileMetaData := userdata.FileMetaData
 	if(fileMetaData==nil){
 		fileMetaData = make(map[string]map[string][]byte)
@@ -435,6 +464,7 @@ type sharingRecord struct {
 	IndexHMAC []byte
 	Secret    []byte
 	Hash     []byte
+	IsOwner []byte
 }
 type encryptRecord struct {
 	Bytes []byte
@@ -454,6 +484,15 @@ func (userdata *User) ShareFile(filename string, recipient string) (msgid string
 	// if filedata == nil {
 	// 	return " ", errors.New("There is no such file")
 	// }
+	hashKey := strings.Repeat("7",16)
+	UserNmHmac := userlib.NewHMAC([]byte(hashKey))
+	UserNmHmac.Write([]byte(recipient))
+	Usernamehmac := UserNmHmac.Sum(nil)
+	user,ok := userlib.DatastoreGet(string(Usernamehmac))
+	if !ok || user==nil{
+		return "",errors.New("No such recipient")
+	}
+
 	fileNmHmac := userlib.NewHMAC([]byte(userdata.Username))
 	fileNmHmac.Write([]byte(filename))
 	fileNameHMAC := fileNmHmac.Sum(nil)
@@ -469,6 +508,7 @@ func (userdata *User) ShareFile(filename string, recipient string) (msgid string
 	sr.IndexHMAC = filedata["index"]
 	sr.Secret = filedata["secret"]
 	sr.Hash = filedata["hash"]
+	sr.IsOwner = []byte("0")
 
 	//maintining integrity
 	srJson, _ := json.Marshal(sr)
@@ -577,6 +617,7 @@ func (userdata *User) ReceiveFile(filename string, sender string, msgid string) 
 	fileData["index"] = sr.IndexHMAC
 	fileData["secret"] = sr.Secret
 	fileData["hash"] = sr.Hash
+	fileData["isOwner"] = sr.IsOwner
 	//fileMetaData := userdata.FileMetaData
 
 	if(userdata.FileMetaData==nil){
@@ -619,6 +660,7 @@ func (userdata *User) ReceiveFile(filename string, sender string, msgid string) 
 // RevokeFile : function used revoke the shared file access
 func (userdata *User) RevokeFile(filename string) (err error) {
 
+
 fileNmHmac := userlib.NewHMAC([]byte(userdata.Username))
 fileNmHmac.Write([]byte(filename))
 fileNameHMAC := fileNmHmac.Sum(nil)
@@ -632,7 +674,9 @@ return errors.New("There is no such file")
 }
 
 indexHMAC := filedata["index"]
-
+if string(filedata["isOwner"])=="0"{
+	return errors.New("Cannot revoke!!")
+}
 //secret := userlib.RandomBytes(16)
 
 indexFileBytes, _ := userlib.DatastoreGet(string(indexHMAC))
