@@ -820,9 +820,7 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 
 	cipher.XORKeyStream(dataStruct[userlib.BlockSize:], dataStruct[userlib.BlockSize:])
 
-	// str := string(dataStruct[userlib.BlockSize:])
-	// str=""
-	// fmt.Println("dataStruct string: ", str)
+	
 
 	var user1 User
 	json.Unmarshal(dataStruct[userlib.BlockSize:], &user1)
@@ -833,7 +831,7 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 	var actualMeta map[string]map[string][]byte
 	actualMeta = user1.FileMetaData
 
-	//fmt.Println("actualHMAC: ",actualHMAC)
+	
 	user1.UserHMAC = nil
 	user1.FileMetaData = nil
 
@@ -854,8 +852,5 @@ func GetUser(username string, password string) (userdataptr *User, err error) {
 	user1.FileMetaData = actualMeta
 
 	userJson,_ = json.Marshal(user1)
-	//fmt.Println("before returning user: ",string(userJson))
-	//fmt.Println("usrname: ", *user1.RSAPrivateKey)
-	//fmt.Println("getUser returned: ",user1)
 	return &user1, nil
 }

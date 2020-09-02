@@ -1,5 +1,5 @@
 func main() {
-	//fmt.Println("Hello World!!!")
+	
 	// userlib.DatastoreSet("foo", []byte("bar"))
 	// data, valid := userlib.DatastoreGet("foo")
 	// if valid {
